@@ -8,14 +8,6 @@ const GoogleSheetService = require('../../../ReelShare-GeminiNodeProxy/GoogleShe
 const sheetService = new GoogleSheetService()
 let activeSunoLicense = null
 
-async function getLicenses() {
-  const licKeys = await sheetService.getSunoLicenseKeys()
-  activeSunoLicense = await sheetService.getSunoActiveLicense()
-  console.log("getLicenses: licKeys:", JSON.stringify(licKeys,null,2))
-}
-
-//getLicenses();
-
 const logger = pino();
 export const DEFAULT_MODEL = "chirp-v3-5";
 
@@ -501,26 +493,44 @@ class SunoApi {
     console.log("licenseCheckDecorator: method name:", method.name)
 
     return async (...args) => {
-      const credits = await this.get_credits();
+      let credits = await this.get_credits();
        console.log("licenseCheckDecorator: credits:", JSON.stringify(credits, null, 2));
 
       if (credits.credits_left < 44) {
         console.log("licenseCheckDecorator credits < 44");
-        const new_Cookie =
-        "__cf_bm=Pnar9zZp8l7qYXTKxeiwBZVSePm7Ir8uQV6.J8.fJs4-1730061365-1.0.1.1-fIdD4izPybDzN2RpiaVwVCObXdy4d9perDW0QWtCtymceISI4GsVuNPyjWYSk_R7Ud.zRW3vYit8GgJKXYiPtQ; _cfuvid=sjkVVvRoN9KELPNuXoEViSa9HNkL4ttXbaMPmUe5fDk-1730061365693-0.0.1.1-604800000; _ga=GA1.1.2065282642.1730061367; ajs_anonymous_id=0824b3a7-a26d-49f3-9407-fbc22ff4362a; __client=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF8ybzJJaG80UzE0QmtHTFFZMUdTdDBhaklNUTgiLCJyb3RhdGluZ190b2tlbiI6IndnaXJtdjl4c2Noa3R5b290aDBqZmpid2gycWY1a3ltemNnOTAwejkifQ.t9jkwnLO69LYCOVaxiVlOobNPQbLFgz91wT3sVDOa4YopYkW3yrnveBxmOAjtkJanGFIe6OCYllaTzbXdtHOhlAgHA5sGDjd4K92lWsSNiSWw3ABGhMDBXonWe67jc7RKqG2bl4QUU4WGOi98YJjEAGJEOV9iwign1I4VtzR0UX9YiIHqbbqIG1KZmuSOpOh-g0Mmtt6Lc5BJCbcjeJTzQminYxJqlpu6FafAPwDmng303D4_kFh-mJ9HuuJtv-PTMN6COdQMvUrrnef_lk5MECsZDjQaFi8SDZmOR8OXNjocSOQE0wbZDehV-mr8WBMMbfAlnbUY6LrF1ZXXIRhxw; __client_uat=1730061381; __client_uat_U9tcbTPE=1730061381; mp_26ced217328f4737497bd6ba6641ca1c_mixpanel=%7B%22distinct_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%2C%22%24device_id%22%3A%20%22192cfb1734b530-00add237568357-26011951-1fa400-192cfb1734c530%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%2C%22__mps%22%3A%20%7B%7D%2C%22__mpso%22%3A%20%7B%7D%2C%22__mpus%22%3A%20%7B%7D%2C%22__mpa%22%3A%20%7B%7D%2C%22__mpu%22%3A%20%7B%7D%2C%22__mpr%22%3A%20%5B%5D%2C%22__mpap%22%3A%20%5B%5D%2C%22%24search_engine%22%3A%20%22google%22%2C%22%24user_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%7D; _ga_7B0KEDD7XP=GS1.1.1730061366.1.1.1730061574.0.0.0";
-     
-        console.log("licenseCheckDecorator: Instantiating new Instance");
-        sunoApi = newSunoApi(new_Cookie);
-     
-        console.log(`licenseCheckDecorator: calling ${method.name} of new Instance`)
-        return await (await sunoApi)[method.name](...args);
+        
+        const licKeys = await sheetService.getSunoLicenseKeys()
+        console.log("licenseCheckDecorator: licKeys.length:",licKeys.length )
+
+        for (const lic of licKeys){
+          console.log(`licenseCheckDecorator: new Instance with ${lic.account}`);
+          const new_Cookie = lic.licenseKey
+          sunoApi = newSunoApi(new_Cookie);
+
+          credits = await (await sunoApi).get_credits()
+          if(credits.credits_left >=44){ 
+            
+            console.log(`licenseCheckDecorator:FOUND VALID LICENSE: ${lic.account}`)
+            activeSunoLicense = lic
+            await sheetService.setSunoActiveLicense(lic.account, lic.licenseKey)
+
+            return await (await sunoApi)[method.name](...args);
+          }
+          else {
+            console.log(`licenseCheckDecorator:LICENSE NOT GOOD:${lic.account}`)
+          } 
+        }
+       
+        console.log(`licenseCheckDecorator: NO LICENSE WAS GOOD. Calling original account.${activeSunoLicense.account}`)
+        return method.apply(this, args);     
+ 
       }
 
       console.log("licenseCheckDecorator: Calling the this instance method")
       return method.apply(this, args);
     };
   }
-  
+}
 const newSunoApi = async (cookie: string) => {
   console.log("newSunoApi global method is called")
   if(!cookie)
