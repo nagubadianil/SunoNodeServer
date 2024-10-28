@@ -33,15 +33,21 @@ class SunoApi {
   private static CLERK_BASE_URL: string = 'https://clerk.suno.com';
   private static JSDELIVR_BASE_URL: string = 'https://data.jsdelivr.com';
 
-  private readonly client: AxiosInstance;
+  private client?: AxiosInstance;
   private clerkVersion?: string;
   private sid?: string;
   private currentToken?: string;
 
-  constructor(cookie: string) {
+  public async init(cookie: string): Promise<SunoApi> {
+    console.log("init() beg")
+    console.log("SunoApi init: cookie:", cookie.substring(0,20) + "...")
+
+
     const cookieJar = new CookieJar();
     const randomUserAgent = new UserAgent(/Chrome/).random().toString();
-    this.client = wrapper(axios.create({
+
+    console.log("init: before create axios wrapper")
+    const client = wrapper(axios.create({
       jar: cookieJar,
       withCredentials: true,
       headers: {
@@ -49,15 +55,16 @@ class SunoApi {
         'Cookie': cookie
       }
     }))
-    this.client.interceptors.request.use((config) => {
+    console.log("init: before interceptors")
+    client.interceptors.request.use((config) => {
       if (this.currentToken) { // Use the current token status
         config.headers['Authorization'] = `Bearer ${this.currentToken}`;
       }
       return config;
     });
-  }
 
-  public async init(): Promise<SunoApi> {
+    this.client = client
+    console.log("init: before getClerkLatestVersion and code")
     await this.getClerkLatestVersion();
     await this.getAuthToken();
     await this.keepAlive();
@@ -367,35 +374,41 @@ public async custom_generate(
    * @returns A promise that resolves to an array of AudioInfo objects.
    */
   public async get(songIds?: string[]): Promise<AudioInfo[]> {
-    await this.keepAlive(false);
-    let url = `${SunoApi.BASE_URL}/api/feed/`;
-    if (songIds) {
-      url = `${url}?ids=${songIds.join(',')}`;
-    }
-    logger.info("Get audio status: " + url);
-    const response = await this.client.get(url, {
-      // 3 seconds timeout
-      timeout: 3000
-    });
 
-    const audios = response.data;
-    return audios.map((audio: any) => ({
-      id: audio.id,
-      title: audio.title,
-      image_url: audio.image_url,
-      lyric: audio.metadata.prompt ? this.parseLyrics(audio.metadata.prompt) : "",
-      audio_url: audio.audio_url,
-      video_url: audio.video_url,
-      created_at: audio.created_at,
-      model_name: audio.model_name,
-      status: audio.status,
-      gpt_description_prompt: audio.metadata.gpt_description_prompt,
-      prompt: audio.metadata.prompt,
-      type: audio.metadata.type,
-      tags: audio.metadata.tags,
-      duration: audio.metadata.duration,  
-      error_message: audio.metadata.error_message,
-    }));
+    return await this.change_Account(async (context)=>{
+     
+      await context.keepAlive(false);
+      let url = `${SunoApi.BASE_URL}/api/feed/`;
+      if (songIds) {
+        url = `${url}?ids=${songIds.join(',')}`;
+      }
+      logger.info("Get audio status: " + url);
+      const response = await context.client.get(url, {
+        // 3 seconds timeout
+        timeout: 3000
+      });
+  
+      const audios = response.data;
+      return audios.map((audio: any) => ({
+        id: audio.id,
+        title: audio.title,
+        image_url: audio.image_url,
+        lyric: audio.metadata.prompt ? this.parseLyrics(audio.metadata.prompt) : "",
+        audio_url: audio.audio_url,
+        video_url: audio.video_url,
+        created_at: audio.created_at,
+        model_name: audio.model_name,
+        status: audio.status,
+        gpt_description_prompt: audio.metadata.gpt_description_prompt,
+        prompt: audio.metadata.prompt,
+        type: audio.metadata.type,
+        tags: audio.metadata.tags,
+        duration: audio.metadata.duration,  
+        error_message: audio.metadata.error_message,
+      }));
+
+    })
+    
   }
 
   /**
@@ -409,9 +422,16 @@ public async custom_generate(
     return response.data;
   }
 
-  public async get_credits(): Promise<object> {
-    await this.keepAlive(false);
+  public async get_credits(alive=false): Promise<object> {
+    if(!alive){
+      await this.keepAlive(alive);
+    }
+    console.log("get_credits: before calling client.get")
+    
     const response = await this.client.get(`${SunoApi.BASE_URL}/api/billing/info/`);
+    
+    console.log("get_credits: response.total_credits_left:", JSON.stringify(response.data.total_credits_left,null,2))
+    
     return {
       credits_left: response.data.total_credits_left,
       period: response.data.period,
@@ -419,15 +439,45 @@ public async custom_generate(
       monthly_usage: response.data.monthly_usage,
     };
   }
+
+  private async change_Account(apiCall){
+    const credits = await this.get_credits()
+    console.log("change_Account: credits:", JSON.stringify(credits,null,2))
+
+    if(credits.credits_left < 44){
+      console.log("credits < 44")
+
+      const new_Cookie = "__cf_bm=Pnar9zZp8l7qYXTKxeiwBZVSePm7Ir8uQV6.J8.fJs4-1730061365-1.0.1.1-fIdD4izPybDzN2RpiaVwVCObXdy4d9perDW0QWtCtymceISI4GsVuNPyjWYSk_R7Ud.zRW3vYit8GgJKXYiPtQ; _cfuvid=sjkVVvRoN9KELPNuXoEViSa9HNkL4ttXbaMPmUe5fDk-1730061365693-0.0.1.1-604800000; _ga=GA1.1.2065282642.1730061367; ajs_anonymous_id=0824b3a7-a26d-49f3-9407-fbc22ff4362a; __client=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF8ybzJJaG80UzE0QmtHTFFZMUdTdDBhaklNUTgiLCJyb3RhdGluZ190b2tlbiI6IndnaXJtdjl4c2Noa3R5b290aDBqZmpid2gycWY1a3ltemNnOTAwejkifQ.t9jkwnLO69LYCOVaxiVlOobNPQbLFgz91wT3sVDOa4YopYkW3yrnveBxmOAjtkJanGFIe6OCYllaTzbXdtHOhlAgHA5sGDjd4K92lWsSNiSWw3ABGhMDBXonWe67jc7RKqG2bl4QUU4WGOi98YJjEAGJEOV9iwign1I4VtzR0UX9YiIHqbbqIG1KZmuSOpOh-g0Mmtt6Lc5BJCbcjeJTzQminYxJqlpu6FafAPwDmng303D4_kFh-mJ9HuuJtv-PTMN6COdQMvUrrnef_lk5MECsZDjQaFi8SDZmOR8OXNjocSOQE0wbZDehV-mr8WBMMbfAlnbUY6LrF1ZXXIRhxw; __client_uat=1730061381; __client_uat_U9tcbTPE=1730061381; mp_26ced217328f4737497bd6ba6641ca1c_mixpanel=%7B%22distinct_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%2C%22%24device_id%22%3A%20%22192cfb1734b530-00add237568357-26011951-1fa400-192cfb1734c530%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%2C%22__mps%22%3A%20%7B%7D%2C%22__mpso%22%3A%20%7B%7D%2C%22__mpus%22%3A%20%7B%7D%2C%22__mpa%22%3A%20%7B%7D%2C%22__mpu%22%3A%20%7B%7D%2C%22__mpr%22%3A%20%5B%5D%2C%22__mpap%22%3A%20%5B%5D%2C%22%24search_engine%22%3A%20%22google%22%2C%22%24user_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%7D; _ga_7B0KEDD7XP=GS1.1.1730061366.1.1.1730061574.0.0.0"
+     
+      const sunoApi = new SunoApi();
+      console.log("Initing new instance with new cookie")
+      await sunoApi.init(new_Cookie);
+
+      console.log("Calling get_credits for test")
+      
+      const credits2 = await sunoApi.get_credits()
+      console.log("New credits: credits2:", JSON.stringify(credits2, null, 2))
+      
+      console.log("Calling the original API Method with new Instance, which was passed in as callback")
+      return await apiCall(sunoApi)
+    }
+    console.log("Calling the original API Method with this")
+    return await apiCall(this)
+  }
 }
+const SUNO_COOKIE = "_ga=GA1.1.1626675578.1729871786; ajs_anonymous_id=3ee71d7a-dc13-42b4-b395-8befe50b5903; __client=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF8ybnc2UnFUYkVNdWRPY3Q2VWNPS1JNRko4eWYiLCJyb3RhdGluZ190b2tlbiI6ImhodmFxNzhwcTc0d252dDlvOTJ6a2hmYW9vdWZ4Mmcwdzdlcmc3M2IifQ.WncUJPhLsEExF7M8jiGNGiuDiQl6xLt_Uckdcr_AiVoK8vcs-FfAXZez5kqfOSlJs6tV4pSGZO2TXPSRgzm-QqGQ4rnFtsQe1K9xo79Gk-JP-vIYVFssJORdd0s6Y2FeyjhBNHZrubbWrjfxeZhU-hr3hafiOeYvG_Rfq66goKLpTnJJXeqlekV2znvpq5FQ2Bp62vEfr6tGK41hh5VE6FEztmRI6nY1eGZreqwwAH8wEiEMBa0jxl5GU0T2XrRcnWztnMZ-ZlXY-TkczjcTb1h_z98fXag5CQT6P21bjVLzfaNl2URD5ZBQK0XhehjWezkVANP4fHA_eaZNHYuaRg; __client_uat=1729871819; __client_uat_U9tcbTPE=1729871819; __cf_bm=8oTHkQvc6qc1bfYHm.7MB5J6r8R4NB6wAtRDvmLqxC8-1730039954-1.0.1.1-Il1EeGjb5kDD0OnC5HLhbbVY9Jsm9v85ZF3M8esPiR8RXIsSUhuOwu.yJFX9P86dvGj4KUmEjViDs7dHVvWIlA; _cfuvid=dAW6IerIycNU.w63W_279Abs2AbdjSa30_Iq3ra5Rfw-1730039954405-0.0.1.1-604800000; mp_26ced217328f4737497bd6ba6641ca1c_mixpanel=%7B%22distinct_id%22%3A%20%22b09ff6ce-a3ab-47ab-b492-7363bbeceb2e%22%2C%22%24device_id%22%3A%20%22192c464ae8b4ea-07a53bf4810987-26001051-144000-192c464ae8b4ea%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%2C%22__mps%22%3A%20%7B%7D%2C%22__mpso%22%3A%20%7B%7D%2C%22__mpus%22%3A%20%7B%7D%2C%22__mpa%22%3A%20%7B%7D%2C%22__mpu%22%3A%20%7B%7D%2C%22__mpr%22%3A%20%5B%5D%2C%22__mpap%22%3A%20%5B%5D%2C%22%24search_engine%22%3A%20%22google%22%2C%22%24user_id%22%3A%20%22b09ff6ce-a3ab-47ab-b492-7363bbeceb2e%22%7D; __stripe_mid=7bc31dd6-dc02-44d4-a020-86e3410b0c7f5912ff; __stripe_sid=1257a204-4217-43bd-ae36-b6b8da5c27611d895a; _ga_7B0KEDD7XP=GS1.1.1730039956.6.1.1730040088.0.0.0"
+//const SUNO_COOKIE = "__cf_bm=Pnar9zZp8l7qYXTKxeiwBZVSePm7Ir8uQV6.J8.fJs4-1730061365-1.0.1.1-fIdD4izPybDzN2RpiaVwVCObXdy4d9perDW0QWtCtymceISI4GsVuNPyjWYSk_R7Ud.zRW3vYit8GgJKXYiPtQ; _cfuvid=sjkVVvRoN9KELPNuXoEViSa9HNkL4ttXbaMPmUe5fDk-1730061365693-0.0.1.1-604800000; _ga=GA1.1.2065282642.1730061367; ajs_anonymous_id=0824b3a7-a26d-49f3-9407-fbc22ff4362a; __client=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNsaWVudF8ybzJJaG80UzE0QmtHTFFZMUdTdDBhaklNUTgiLCJyb3RhdGluZ190b2tlbiI6IndnaXJtdjl4c2Noa3R5b290aDBqZmpid2gycWY1a3ltemNnOTAwejkifQ.t9jkwnLO69LYCOVaxiVlOobNPQbLFgz91wT3sVDOa4YopYkW3yrnveBxmOAjtkJanGFIe6OCYllaTzbXdtHOhlAgHA5sGDjd4K92lWsSNiSWw3ABGhMDBXonWe67jc7RKqG2bl4QUU4WGOi98YJjEAGJEOV9iwign1I4VtzR0UX9YiIHqbbqIG1KZmuSOpOh-g0Mmtt6Lc5BJCbcjeJTzQminYxJqlpu6FafAPwDmng303D4_kFh-mJ9HuuJtv-PTMN6COdQMvUrrnef_lk5MECsZDjQaFi8SDZmOR8OXNjocSOQE0wbZDehV-mr8WBMMbfAlnbUY6LrF1ZXXIRhxw; __client_uat=1730061381; __client_uat_U9tcbTPE=1730061381; mp_26ced217328f4737497bd6ba6641ca1c_mixpanel=%7B%22distinct_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%2C%22%24device_id%22%3A%20%22192cfb1734b530-00add237568357-26011951-1fa400-192cfb1734c530%22%2C%22%24initial_referrer%22%3A%20%22%24direct%22%2C%22%24initial_referring_domain%22%3A%20%22%24direct%22%2C%22__mps%22%3A%20%7B%7D%2C%22__mpso%22%3A%20%7B%7D%2C%22__mpus%22%3A%20%7B%7D%2C%22__mpa%22%3A%20%7B%7D%2C%22__mpu%22%3A%20%7B%7D%2C%22__mpr%22%3A%20%5B%5D%2C%22__mpap%22%3A%20%5B%5D%2C%22%24search_engine%22%3A%20%22google%22%2C%22%24user_id%22%3A%20%229490581d-a1d2-4ebf-9355-e68bd65e8233%22%7D; _ga_7B0KEDD7XP=GS1.1.1730061366.1.1.1730061574.0.0.0"
 
 const newSunoApi = async (cookie: string) => {
-  const sunoApi = new SunoApi(cookie);
-  return await sunoApi.init();
+  console.log("newSunoApi global method is called")
+  const sunoApi = new SunoApi();
+  await sunoApi.init(cookie);
+
+  return sunoApi
+}
+     
+if (!SUNO_COOKIE) {
+  console.log("Environment does not contain SUNO_COOKIE.")
 }
 
-if (!process.env.SUNO_COOKIE) {
-  console.log("Environment does not contain SUNO_COOKIE.", process.env)
-}
-
-export const sunoApi = newSunoApi(process.env.SUNO_COOKIE || '');
+export const sunoApi = newSunoApi(SUNO_COOKIE || '');
