@@ -43,7 +43,13 @@ class SunoApi {
 
 
   private setupBindings() {
-    this.get = this.licenseCheckDecorator(this.get);
+
+    this.generate = this.licenseCheckDecorator(this.generate);
+    this.concatenate = this.licenseCheckDecorator(this.concatenate);
+    this.custom_generate = this.licenseCheckDecorator(this.custom_generate);
+    this.generateLyrics = this.licenseCheckDecorator(this.generateLyrics);
+    this.extendAudio = this.licenseCheckDecorator(this.extendAudio);
+    
   }
 
   public async init(cookie: string): Promise<SunoApi> {
@@ -494,21 +500,17 @@ class SunoApi {
 
     return async (...args) => {
       let credits = await this.get_credits();
-       console.log("licenseCheckDecorator: credits:", JSON.stringify(credits, null, 2));
+      //console.log("licenseCheckDecorator: credits:", JSON.stringify(credits, null, 2));
 
-      if (credits.credits_left < 44) {
-        console.log("licenseCheckDecorator credits < 44");
+      if (credits.credits_left < 10) {
         
         const licKeys = await sheetService.getSunoLicenseKeys()
-        console.log("licenseCheckDecorator: licKeys.length:",licKeys.length )
-
         for (const lic of licKeys){
-          console.log(`licenseCheckDecorator: new Instance with ${lic.account}`);
           const new_Cookie = lic.licenseKey
           sunoApi = newSunoApi(new_Cookie);
 
           credits = await (await sunoApi).get_credits()
-          if(credits.credits_left >=44){ 
+          if(credits.credits_left >= 10){ 
             
             console.log(`licenseCheckDecorator:FOUND VALID LICENSE: ${lic.account}`)
             activeSunoLicense = lic
@@ -526,13 +528,11 @@ class SunoApi {
  
       }
 
-      console.log("licenseCheckDecorator: Calling the this instance method")
       return method.apply(this, args);
     };
   }
 }
 const newSunoApi = async (cookie: string) => {
-  console.log("newSunoApi global method is called")
   if(!cookie)
     {
       activeSunoLicense = await sheetService.getSunoActiveLicense()
