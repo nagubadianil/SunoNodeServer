@@ -56,7 +56,7 @@ class SunoApi {
    // console.log("init() beg");
     this.setupBindings()
 
-    console.log("SunoApi init: cookie:", cookie.substring(0, 20) + "...");
+   // console.log("SunoApi init: cookie:", cookie.substring(0, 20) + "...");
 
     const cookieJar = new CookieJar();
     const randomUserAgent = new UserAgent(/Chrome/).random().toString();
@@ -229,9 +229,9 @@ class SunoApi {
       negative_tags
     );
     const costTime = Date.now() - startTime;
-    logger.info(
-      "Custom Generate Response:\n" + JSON.stringify(audios, null, 2)
-    );
+    // logger.info(
+    //   "Custom Generate Response:\n" + JSON.stringify(audios, null, 2)
+    // );
     logger.info("Cost time: " + costTime);
     return audios;
   }
@@ -272,23 +272,23 @@ class SunoApi {
     } else {
       payload.gpt_description_prompt = prompt;
     }
-    logger.info(
-      "generateSongs payload:\n" +
-        JSON.stringify(
-          {
-            prompt: prompt,
-            isCustom: isCustom,
-            tags: tags,
-            title: title,
-            make_instrumental: make_instrumental,
-            wait_audio: wait_audio,
-            negative_tags: negative_tags,
-            payload: payload,
-          },
-          null,
-          2
-        )
-    );
+    // logger.info(
+    //   "generateSongs payload:\n" +
+    //     JSON.stringify(
+    //       {
+    //         prompt: prompt,
+    //         isCustom: isCustom,
+    //         tags: tags,
+    //         title: title,
+    //         make_instrumental: make_instrumental,
+    //         wait_audio: wait_audio,
+    //         negative_tags: negative_tags,
+    //         payload: payload,
+    //       },
+    //       null,
+    //       2
+    //     )
+    // );
     const response = await this.client.post(
       `${SunoApi.BASE_URL}/api/generate/v2/`,
       payload,
@@ -296,9 +296,9 @@ class SunoApi {
         timeout: 10000, // 10 seconds timeout
       }
     );
-    logger.info(
-      "generateSongs Response:\n" + JSON.stringify(response.data, null, 2)
-    );
+    // logger.info(
+    //   "generateSongs Response:\n" + JSON.stringify(response.data, null, 2)
+    // );
     if (response.status !== 200) {
       throw new Error("Error response:" + response.statusText);
     }
@@ -496,7 +496,7 @@ class SunoApi {
   }
 
   private licenseCheckDecorator(method) {
-    console.log("licenseCheckDecorator: method name:", method.name)
+    //console.log("licenseCheckDecorator: method name:", method.name)
 
     return async (...args) => {
       let credits = await this.get_credits();
