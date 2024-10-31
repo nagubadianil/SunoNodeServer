@@ -4,7 +4,7 @@ import pino from 'pino';
 import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 import { sleep } from "@/lib/utils";
-const GoogleSheetService = require('../../../ReelShare-GeminiNodeProxy/GoogleSheetService'); 
+const GoogleSheetService = require('googlesheetservice'); 
 const sheetService = new GoogleSheetService()
 let activeSunoLicense = null
 
