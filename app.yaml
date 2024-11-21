@@ -1,0 +1,2 @@
+runtime: nodejs20
+entrypoint: npm run dev -- -p 8080

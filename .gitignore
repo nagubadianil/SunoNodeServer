@@ -1,7 +1,10 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+googleserviceaccount.json
 gemini-api-reelshare-serviceaccount.json.encrypted
-gemini-api-reelshare-serviceaccount.json
+encryptdecrypt.js
+GoogleSheetService.js
+
 # dependencies
 /node_modules
 /.pnp
