@@ -3,7 +3,7 @@ const UserAgent = require('user-agents');
 const pino = require('pino');
 const { wrapper } = require("axios-cookiejar-support");
 const { CookieJar } = require("tough-cookie");
-const { sleep } = require("@/lib/utils");
+const { sleep } = require("./utils.js");
 const GoogleSheetService = require('./GoogleSheetService.js'); 
 const sheetService = new GoogleSheetService();
 let activeSunoLicense = null;
@@ -355,4 +355,5 @@ const newSunoApi = async (cookie) => {
   return sunoApi;
 };
 
-export let sunoApi = newSunoApi('');
+let sunoApi = newSunoApi('');
+module.exports = { sunoApi, DEFAULT_MODEL }
